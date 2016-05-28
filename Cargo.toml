@@ -1,0 +1,19 @@
+[package]
+name = "freecell"
+version = "0.1.0"
+authors = ["Murarth <murarth@gmail.com>"]
+
+[[bin]]
+name = "freecell"
+path = "src/main.rs"
+doc = false
+test = false
+
+[lib]
+name = "freecell"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "0.3"
+rustbox = "0.8"
+rustc-serialize = "0.3"
