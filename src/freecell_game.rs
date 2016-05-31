@@ -746,25 +746,31 @@ impl GameImpl for FreeCellGame {
                 _ => return
             }
         } else {
+            if self.action.is_none() {
+                match key {
+                    Key::Char('l') => self.begin_locate(),
+                    Key::Char('n') => self.confirm_new_game(game),
+                    Key::Char('p') => {
+                        game.pause();
+                        self.pause_draw = Draw::Pause;
+                    }
+                    Key::Char('q') => self.confirm_quit(game),
+                    Key::Char('u') => self.undo(game),
+                    Key::Ctrl('r') => self.redo(game),
+                    Key::Char('S') => {
+                        game.pause();
+                        self.pause_draw = Draw::Stats;
+                    }
+                    Key::Char('?') => {
+                        game.pause();
+                        self.pause_draw = Draw::Help;
+                    }
+                    _ => ()
+                }
+            }
+
             match key {
                 Key::Esc | Key::Char(' ') => self.clear_action(game),
-                Key::Char('l') => self.begin_locate(),
-                Key::Char('n') => self.confirm_new_game(game),
-                Key::Char('p') => {
-                    game.pause();
-                    self.pause_draw = Draw::Pause;
-                }
-                Key::Char('q') => self.confirm_quit(game),
-                Key::Char('u') => self.undo(game),
-                Key::Ctrl('r') => self.redo(game),
-                Key::Char('S') => {
-                    game.pause();
-                    self.pause_draw = Draw::Stats;
-                }
-                Key::Char('?') => {
-                    game.pause();
-                    self.pause_draw = Draw::Help;
-                }
                 Key::Char('r') => self.action(game, Action::Reserve),
                 Key::Char('t') => self.action(game, Action::Foundation),
                 Key::Char('a') => self.action(game, Action::Slot(0)),
