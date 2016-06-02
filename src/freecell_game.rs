@@ -438,7 +438,7 @@ impl FreeCellGame {
         let w = rb.width();
         let h = rb.height();
 
-        rb.move_to(w / 2, h / 2);
+        rb.move_to((w / 2).saturating_sub(4), h / 2);
         rb.write_sty(rustbox::RB_BOLD, "You won!");
     }
 
