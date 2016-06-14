@@ -55,13 +55,34 @@ pub struct FreeCellGame {
     game_won: bool,
 }
 
-#[derive(Copy, Clone, Default, RustcDecodable, RustcEncodable)]
+#[derive(RustcDecodable)]
+struct StatsFile {
+    games: Option<u32>,
+    won: Option<u32>,
+    highest_time: Option<u32>,
+    lowest_time: Option<u32>,
+    total_time: Option<u32>,
+}
+
+#[derive(Default, RustcEncodable)]
 struct Stats {
     games: u32,
     won: u32,
     highest_time: u32,
     lowest_time: u32,
     total_time: u32,
+}
+
+impl From<StatsFile> for Stats {
+    fn from(s: StatsFile) -> Stats {
+        Stats{
+            games: s.games.unwrap_or(0),
+            won: s.won.unwrap_or(0),
+            highest_time: s.highest_time.unwrap_or(0),
+            lowest_time: s.lowest_time.unwrap_or(0),
+            total_time: s.total_time.unwrap_or(0),
+        }
+    }
 }
 
 impl Stats {
@@ -91,13 +112,21 @@ fn stats_path() -> PathBuf {
 }
 
 fn load_stats() -> io::Result<Stats> {
-    let mut f = try!(File::open(&stats_path()));
+    let mut f = match File::open(&stats_path()) {
+        Ok(f) => f,
+        Err(ref e) if e.kind() == io::ErrorKind::NotFound =>
+            return Ok(Stats::default()),
+        Err(e) => return Err(e)
+    };
+
     let mut buf = String::new();
 
     try!(f.read_to_string(&mut buf));
 
-    json::decode(&buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    let sf: StatsFile = try!(json::decode(&buf)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())));
+
+    Ok(sf.into())
 }
 
 fn save_stats(stats: &Stats) -> io::Result<()> {
