@@ -59,18 +59,26 @@ pub struct FreeCellGame {
 struct StatsFile {
     games: Option<u32>,
     won: Option<u32>,
+
     highest_time: Option<u32>,
     lowest_time: Option<u32>,
     total_time: Option<u32>,
+
+    longest_streak: Option<u32>,
+    current_streak: Option<u32>,
 }
 
 #[derive(Default, RustcEncodable)]
 struct Stats {
     games: u32,
     won: u32,
+
     highest_time: u32,
     lowest_time: u32,
     total_time: u32,
+
+    longest_streak: u32,
+    current_streak: u32,
 }
 
 impl From<StatsFile> for Stats {
@@ -81,6 +89,8 @@ impl From<StatsFile> for Stats {
             highest_time: s.highest_time.unwrap_or(0),
             lowest_time: s.lowest_time.unwrap_or(0),
             total_time: s.total_time.unwrap_or(0),
+            longest_streak: s.longest_streak.unwrap_or(0),
+            current_streak: s.current_streak.unwrap_or(0),
         }
     }
 }
@@ -231,6 +241,12 @@ impl FreeCellGame {
                 }
                 self.stats.highest_time = max(t, self.stats.highest_time);
                 self.stats.total_time += t;
+
+                self.stats.current_streak += 1;
+                self.stats.longest_streak = max(
+                    self.stats.current_streak, self.stats.longest_streak);
+            } else {
+                self.stats.current_streak = 0;
             }
 
             self.save_stats(game);
@@ -427,7 +443,7 @@ impl FreeCellGame {
         let n_lines = 7;
 
         let startx = w.saturating_sub(20) / 2;
-        let starty = h.saturating_sub(n_lines) / 2 - 2;
+        let starty = h.saturating_sub(n_lines) / 2 - 3;
 
         rb.move_to(w.saturating_sub(5) / 2, starty);
         rb.write_sty(rustbox::RB_BOLD, "STATS");
@@ -436,23 +452,31 @@ impl FreeCellGame {
         rb.next_line(startx);
 
         rb.next_line(startx);
-        rb.write_def(&format!("Games played: {:>5}", self.stats.games));
+        rb.write_def(&format!("Games played:   {:>5}", self.stats.games));
         rb.next_line(startx);
-        rb.write_def(&format!("Games won:    {:>5}", self.stats.won));
+        rb.write_def(&format!("Games won:      {:>5}", self.stats.won));
         rb.next_line(startx);
-        rb.write_def(&format!("Win rate:     {:>4}%", self.stats.win_rate()));
+        rb.write_def(&format!("Win rate:       {:>4}%", self.stats.win_rate()));
 
         // Skip a line
         rb.next_line(startx);
 
         rb.next_line(startx);
-        rb.write_def(&format!("Average time: {:>5}",
+        rb.write_def(&format!("Longest streak: {:>5}", self.stats.longest_streak));
+        rb.next_line(startx);
+        rb.write_def(&format!("Current streak: {:>5}", self.stats.current_streak));
+
+        // Skip a line
+        rb.next_line(startx);
+
+        rb.next_line(startx);
+        rb.write_def(&format!("Average time:   {:>5}",
             time_str(self.stats.average_time())));
         rb.next_line(startx);
-        rb.write_def(&format!("Lowest time:  {:>5}",
+        rb.write_def(&format!("Lowest time:    {:>5}",
             time_str(self.stats.lowest_time)));
         rb.next_line(startx);
-        rb.write_def(&format!("Highest time: {:>5}",
+        rb.write_def(&format!("Highest time:   {:>5}",
             time_str(self.stats.highest_time)));
 
         // Skip a line
