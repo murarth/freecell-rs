@@ -699,7 +699,9 @@ impl FreeCellGame {
     }
 
     fn undo(&mut self, game: &mut Game) {
-        if self.undo_index == 0 {
+        if self.undo.is_empty() {
+            game.set_message("No changes made", one_sec());
+        } else if self.undo_index == 0 {
             game.set_message("Already at initial state", one_sec());
         } else {
             let new_fc = self.undo[self.undo_index - 1].clone();
@@ -715,7 +717,9 @@ impl FreeCellGame {
     }
 
     fn redo(&mut self, game: &mut Game) {
-        if self.undo_index == self.undo.len() {
+        if self.undo.is_empty() {
+            game.set_message("No changes made", one_sec());
+        } else if self.undo_index == self.undo.len() {
             game.set_message("Already at newest state", one_sec());
         } else if self.undo_index == self.undo.len() - 2 {
             self.undo_index += 1;
