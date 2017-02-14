@@ -233,12 +233,11 @@ impl Game {
     }
 
     fn try_expire_message(&mut self) {
-        let expire = self.message.as_ref().map_or(false,
-            |msg| msg.duration.map_or(false, |dur| msg.set.elapsed() >= dur));
-
-        if expire {
-            self.message = None;
-            self.redraw();
+        if let Some(Message{set, duration: Some(dur), ..}) = self.message {
+            if set.elapsed() >= dur {
+                self.message = None;
+                self.redraw();
+            }
         }
     }
 
