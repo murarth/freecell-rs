@@ -106,6 +106,7 @@ impl Game {
         let rb = try!(RustBox::init(InitOptions{
             input_mode: InputMode::Esc,
             buffer_stderr: true,
+            .. InitOptions::default()
         }));
 
         Ok(Game{

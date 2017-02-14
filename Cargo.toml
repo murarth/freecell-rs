@@ -15,5 +15,5 @@ path = "src/lib.rs"
 
 [dependencies]
 rand = "0.3"
-rustbox = "0.8"
+rustbox = "0.9"
 rustc-serialize = "0.3"
