@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use rustbox::{self, Color as rbColor, Style, Key};
-use rustc_serialize::json;
+use serde_json as json;
 
 use freecell::{Card, Color, Face, FreeCell, ACE, JACK, QUEEN, KING};
 use game::{Game, GameImpl, RbWriter, time_str};
@@ -55,7 +55,7 @@ pub struct FreeCellGame {
     game_won: bool,
 }
 
-#[derive(RustcDecodable)]
+#[derive(Deserialize)]
 struct StatsFile {
     games: Option<u32>,
     won: Option<u32>,
@@ -68,7 +68,7 @@ struct StatsFile {
     current_streak: Option<u32>,
 }
 
-#[derive(Default, RustcEncodable)]
+#[derive(Default, Serialize)]
 struct Stats {
     games: u32,
     won: u32,
@@ -133,7 +133,7 @@ fn load_stats() -> io::Result<Stats> {
 
     try!(f.read_to_string(&mut buf));
 
-    let sf: StatsFile = try!(json::decode(&buf)
+    let sf: StatsFile = try!(json::from_str(&buf)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())));
 
     Ok(sf.into())
@@ -141,7 +141,7 @@ fn load_stats() -> io::Result<Stats> {
 
 fn save_stats(stats: &Stats) -> io::Result<()> {
     let mut f = try!(File::create(&stats_path()));
-    let mut data = try!(json::encode(stats)
+    let mut data = try!(json::to_string(stats)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())));
 
     data.push('\n');

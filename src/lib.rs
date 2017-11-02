@@ -1,6 +1,8 @@
 extern crate rand;
 extern crate rustbox;
-extern crate rustc_serialize;
+extern crate serde;
+#[macro_use] extern crate serde_derive;
+extern crate serde_json;
 
 pub mod freecell;
 pub mod freecell_game;
