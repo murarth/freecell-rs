@@ -5,11 +5,11 @@ use std::mem::replace;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use rustbox::{self, Color as rbColor, Style, Key};
+use mortal::{Cursor, Key, Size, Style};
 use serde_json as json;
 
 use freecell::{Card, Color, Face, FreeCell, ACE, JACK, QUEEN, KING};
-use game::{Game, GameImpl, RbWriter, time_str};
+use game::{Game, GameImpl, draw_card, time_str};
 
 const SLOT_NAMES: [char; 8] = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K'];
 
@@ -113,12 +113,17 @@ impl Stats {
     }
 }
 
-// TODO: Where does Windows store app-specific configuration?
 #[cfg(unix)]
 fn stats_path() -> PathBuf {
     use std::env::home_dir;
     let home = home_dir().expect("cannot find home dir");
     home.join(".config/mur-freecell/stats.cfg")
+}
+
+// TODO: Where does Windows store app-specific configuration?
+#[cfg(windows)]
+fn stats_path() -> PathBuf {
+    "stats.cfg".into()
 }
 
 fn load_stats() -> io::Result<Stats> {
@@ -327,55 +332,64 @@ impl FreeCellGame {
     }
 
     fn draw_status(&mut self, game: &mut Game, s: &str) {
+        let screen = game.screen();
+        let Size{lines, columns} = screen.size();
         let n = s.len();
 
-        let mut rb = RbWriter::new(game.rb());
-        let w = rb.width();
-        let h = rb.height();
-
-        rb.move_to(w - n - 1, h - 1);
-        rb.write_sty(rustbox::RB_BOLD, &s);
+        screen.set_cursor(Cursor{
+            column: columns - n - 1,
+            line: lines - 1,
+        });
+        screen.write_styled(None, None, Style::BOLD, s);
     }
 
     fn draw_field(&mut self, game: &mut Game) {
-        let mut rb = RbWriter::new(game.rb());
-        let w = rb.width();
+        let screen = game.screen();
+        let Size{columns, ..} = screen.size();
 
-        rb.move_to((w - ((4 * 5 + 5) * 2 + 1)) / 2, 2);
-        //                |   |   |    |   ` Plus separator
-        //                |   |   |    ` On each side
-        //                |   |   ` Plus surrounding [] and key
-        //                |   ` Five chars wide (including space in between)
-        //                ` Four cards
+        let startx = (columns - ((4 * 5 + 5) * 2 + 1)) / 2;
+        //                       |   |   |    |   ` Plus separator
+        //                       |   |   |    ` On each side
+        //                       |   |   ` Plus surrounding [] and key
+        //                       |   ` Five chars wide (including space in between)
+        //                       ` Four cards
 
-        rb.write_def("R [ ");
+        screen.set_cursor(Cursor{
+            line: 2,
+            column: startx,
+        });
+
+        screen.write_str("R [ ");
 
         for r in self.fc.reserve_slots() {
             match *r {
-                Some(c) => rb.write_card(c, self.highlight_card(c)),
-                None => rb.write_def("____")
+                Some(c) => draw_card(screen, c, self.highlight_card(c)),
+                None => screen.write_str("____")
             }
-            rb.write_def(" ");
+            screen.write_str(" ");
         }
 
-        rb.write_def("] [ ");
+        screen.write_str("] [ ");
 
         for f in self.fc.foundation_slots() {
             match *f {
-                Some(c) => rb.write_card(c, self.highlight_foundation(c)),
-                None => rb.write_def("____")
+                Some(c) => draw_card(screen, c, self.highlight_foundation(c)),
+                None => screen.write_str("____")
             }
-            rb.write_def(" ");
+            screen.write_str(" ");
         }
 
-        rb.write_def("] T");
+        screen.write_str("] T");
 
-        let startx = (w - (8 * 6)) / 2;
-        //                 |   ` Six chars wide (including two spaces between)
-        //                 ` Eight slots
+        let startx = (columns - (8 * 6)) / 2;
+        //                       |   ` Six chars wide (including two spaces between)
+        //                       ` Eight slots
 
-        rb.move_to(startx, 4);
-        rb.write_sty(rustbox::RB_UNDERLINE,
+        screen.set_cursor(Cursor{
+            column: startx,
+            line: 4,
+        });
+        screen.write_styled(None, None, Style::UNDERLINE,
             " A     S     D     F     G     H     J     K  ");
 
         let max = self.fc.tableau_slots().iter().map(|t| t.len()).max().unwrap();
@@ -383,14 +397,17 @@ impl FreeCellGame {
             .map(|t| t.iter()).collect::<Vec<_>>();
 
         for i in 0..max {
-            rb.move_to(startx, i + 5);
+            screen.set_cursor(Cursor{
+                column: startx,
+                line: i + 5,
+            });
 
             for t in &mut cols {
                 match t.next() {
-                    Some(&c) => rb.write_card(c, self.highlight_card(c)),
-                    None => rb.write_def("    ")
+                    Some(&c) => draw_card(screen, c, self.highlight_card(c)),
+                    None => screen.write_str("    ")
                 }
-                rb.write_def("  ");
+                screen.write_str("  ");
             }
         }
     }
@@ -398,15 +415,13 @@ impl FreeCellGame {
     fn draw_pause(&mut self, game: &mut Game) {
         match self.pause_draw {
             Draw::Pause => {
-                let rb = game.rb();
-                let mid = rb.height() / 2;
-                let center = rb.width() / 2;
+                let screen = game.screen();
+                let Size{lines, columns} = screen.size();
+                let mid = lines / 2;
+                let center = columns / 2;
+                let col = center.saturating_sub(3);
 
-                let sty = Style::empty();
-                let fg = rbColor::Default;
-                let bg = rbColor::Default;
-
-                rb.print(center - 3, mid, sty, fg, bg, "Paused");
+                screen.write_at((mid, col), "Paused");
             }
             Draw::Help => self.draw_help(game),
             Draw::Stats => self.draw_stats(game),
@@ -415,84 +430,90 @@ impl FreeCellGame {
     }
 
     fn draw_help(&mut self, game: &mut Game) {
-        let mut rb = RbWriter::new(game.rb());
-        let w = rb.width();
-        let h = rb.height();
+        let screen = game.screen();
+        let Size{lines, columns} = screen.size();
+
         let n_lines = HELP_TEXT.lines().count();
         let max_w = HELP_TEXT.lines().map(|l| l.len()).max().unwrap();
 
-        rb.move_to(w.saturating_sub(4) / 2,
-            h.saturating_sub(n_lines).saturating_sub(2) / 2);
-        rb.write_sty(rustbox::RB_BOLD, "HELP");
+        screen.set_cursor(Cursor{
+            line: lines.saturating_sub(n_lines).saturating_sub(2) / 2,
+            column: columns.saturating_sub(4) / 2,
+        });
+        screen.write_styled(None, None, Style::BOLD, "HELP");
 
-        let startx = w.saturating_sub(max_w) / 2;
+        let startx = columns.saturating_sub(max_w) / 2;
 
         // Skip a full line
-        rb.next_line(startx);
+        screen.next_line(startx);
 
         for line in HELP_TEXT.lines() {
-            rb.next_line(startx);
-            rb.write_def(line);
+            screen.next_line(startx);
+            screen.write_str(line);
         }
     }
 
     fn draw_stats(&mut self, game: &mut Game) {
-        let mut rb = RbWriter::new(game.rb());
-        let w = rb.width();
-        let h = rb.height();
+        let screen = game.screen();
+        let Size{lines, columns} = screen.size();
         let n_lines = 7;
 
-        let startx = w.saturating_sub(20) / 2;
-        let starty = h.saturating_sub(n_lines) / 2 - 3;
+        let startx = columns.saturating_sub(20) / 2;
+        let starty = lines.saturating_sub(n_lines) / 2 - 3;
 
-        rb.move_to(w.saturating_sub(5) / 2, starty);
-        rb.write_sty(rustbox::RB_BOLD, "STATS");
+        screen.set_cursor(Cursor{
+            column: columns.saturating_sub(5) / 2,
+            line: starty,
+        });
+        screen.write_styled(None, None, Style::BOLD, "STATS");
 
         // Skip a full line
-        rb.next_line(startx);
+        screen.next_line(startx);
 
-        rb.next_line(startx);
-        rb.write_def(&format!("Games played:   {:>5}", self.stats.games));
-        rb.next_line(startx);
-        rb.write_def(&format!("Games won:      {:>5}", self.stats.won));
-        rb.next_line(startx);
-        rb.write_def(&format!("Win rate:       {:>4}%", self.stats.win_rate()));
-
-        // Skip a line
-        rb.next_line(startx);
-
-        rb.next_line(startx);
-        rb.write_def(&format!("Longest streak: {:>5}", self.stats.longest_streak));
-        rb.next_line(startx);
-        rb.write_def(&format!("Current streak: {:>5}", self.stats.current_streak));
+        screen.next_line(startx);
+        screen.write_str(&format!("Games played:   {:>5}", self.stats.games));
+        screen.next_line(startx);
+        screen.write_str(&format!("Games won:      {:>5}", self.stats.won));
+        screen.next_line(startx);
+        screen.write_str(&format!("Win rate:       {:>4}%", self.stats.win_rate()));
 
         // Skip a line
-        rb.next_line(startx);
+        screen.next_line(startx);
 
-        rb.next_line(startx);
-        rb.write_def(&format!("Average time:   {:>5}",
+        screen.next_line(startx);
+        screen.write_str(&format!("Longest streak: {:>5}", self.stats.longest_streak));
+        screen.next_line(startx);
+        screen.write_str(&format!("Current streak: {:>5}", self.stats.current_streak));
+
+        // Skip a line
+        screen.next_line(startx);
+
+        screen.next_line(startx);
+        screen.write_str(&format!("Average time:   {:>5}",
             time_str(self.stats.average_time())));
-        rb.next_line(startx);
-        rb.write_def(&format!("Lowest time:    {:>5}",
+        screen.next_line(startx);
+        screen.write_str(&format!("Lowest time:    {:>5}",
             time_str(self.stats.lowest_time)));
-        rb.next_line(startx);
-        rb.write_def(&format!("Highest time:   {:>5}",
+        screen.next_line(startx);
+        screen.write_str(&format!("Highest time:   {:>5}",
             time_str(self.stats.highest_time)));
 
         // Skip a line
-        rb.next_line(startx);
+        screen.next_line(startx);
 
-        rb.next_line(startx);
-        rb.write_def("Press 'c' to clear");
+        screen.next_line(startx);
+        screen.write_str("Press 'c' to clear");
     }
 
     fn draw_victory(&mut self, game: &mut Game) {
-        let mut rb = RbWriter::new(game.rb());
-        let w = rb.width();
-        let h = rb.height();
+        let screen = game.screen();
+        let Size{lines, columns} = screen.size();
 
-        rb.move_to((w / 2).saturating_sub(4), h / 2);
-        rb.write_sty(rustbox::RB_BOLD, "You won!");
+        screen.set_cursor(Cursor{
+            column: (columns / 2).saturating_sub(4),
+            line: lines / 2,
+        });
+        screen.write_styled(None, None, Style::BOLD, "You won!");
     }
 
     fn action(&mut self, game: &mut Game, action: Action) {
@@ -763,7 +784,7 @@ impl GameImpl for FreeCellGame {
             game.quit();
         } else if game.paused() {
             match key {
-                Key::Esc | Key::Char(' ') | Key::Char('p')
+                Key::Escape | Key::Char(' ') | Key::Char('p')
                         if self.pause_draw != Draw::Victory => {
                     game.toggle_pause()
                 }
@@ -780,7 +801,7 @@ impl GameImpl for FreeCellGame {
             }
         } else if self.locate.is_some() {
             match key {
-                Key::Esc | Key::Char(' ') => {
+                Key::Escape | Key::Char(' ') => {
                     self.locate = None;
                     game.redraw();
                     return;
@@ -827,7 +848,7 @@ impl GameImpl for FreeCellGame {
             }
 
             match key {
-                Key::Esc | Key::Char(' ') => self.clear_action(game),
+                Key::Escape | Key::Char(' ') => self.clear_action(game),
                 Key::Char('r') => self.action(game, Action::Reserve),
                 Key::Char('t') => self.action(game, Action::Foundation),
                 Key::Char('a') => self.action(game, Action::Slot(0)),
@@ -846,11 +867,11 @@ impl GameImpl for FreeCellGame {
         game.redraw();
     }
 
-    fn on_tick(&mut self, game: &mut Game) {
+    fn on_tick(&mut self, game: &mut Game) -> io::Result<()> {
         if !game.paused() {
             // Redraw the clock
             game.draw_title(true);
-            game.refresh();
+            game.refresh()?;
 
             if self.fc.game_over() {
                 self.game_won(game);
@@ -858,5 +879,7 @@ impl GameImpl for FreeCellGame {
                 self.sweep_step(game);
             }
         }
+
+        Ok(())
     }
 }

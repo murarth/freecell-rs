@@ -1,77 +1,9 @@
+use std::io;
 use std::time::{Duration, Instant};
-use std::ops;
 
-use rustbox::{self, Color, Event, EventError,
-    InitError, InitOptions, InputMode, Key, RustBox, Style};
+use mortal::{Cursor, CursorMode, Event, Key, Screen, Size, Style};
 
 use freecell::Card;
-
-pub struct RbWriter<'a> {
-    rb: &'a RustBox,
-    x: usize,
-    y: usize,
-}
-
-impl<'a> RbWriter<'a> {
-    pub fn new(rb: &RustBox) -> RbWriter {
-        RbWriter{
-            rb: rb,
-            x: 0,
-            y: 0,
-        }
-    }
-
-    pub fn move_to(&mut self, x: usize, y: usize) {
-        self.x = x;
-        self.y = y;
-    }
-
-    pub fn next_line(&mut self, x: usize) {
-        self.x = x;
-        self.y += 1;
-    }
-
-    pub fn write(&mut self, sty: Style, fg: Color, bg: Color, s: &str) {
-        let n = s.chars().count();
-
-        self.rb.print(self.x, self.y, sty, fg, bg, s);
-        self.x += n;
-    }
-
-    pub fn write_card(&mut self, card: Card, highlight: bool) {
-        let sty = if highlight {
-            rustbox::RB_REVERSE
-        } else {
-            Style::empty()
-        };
-        let fg = card.suit.color().console_color();
-        let bg = Color::Default;
-        let s = format!("{} {:>2}", card.suit.char(), card.value);
-
-        self.write(sty, fg, bg, &s);
-    }
-
-    pub fn write_def(&mut self, s: &str) {
-        let sty = Style::empty();
-        let fg = Color::Default;
-        let bg = Color::Default;
-
-        self.write(sty, fg, bg, s);
-    }
-
-    pub fn write_sty(&mut self, sty: Style, s: &str) {
-        let fg = Color::Default;
-        let bg = Color::Default;
-
-        self.write(sty, fg, bg, s);
-    }
-}
-
-impl<'a> ops::Deref for RbWriter<'a> {
-    type Target = RustBox;
-
-    fn deref(&self) -> &RustBox { self.rb }
-}
 
 #[allow(unused_variables)]
 pub trait GameImpl {
@@ -79,11 +11,11 @@ pub trait GameImpl {
 
     fn on_key_event(&mut self, game: &mut Game, key: Key);
 
-    fn on_tick(&mut self, game: &mut Game) {}
+    fn on_tick(&mut self, game: &mut Game) -> io::Result<()> { Ok(()) }
 }
 
 pub struct Game {
-    rb: RustBox,
+    screen: Screen,
     title: &'static str,
     game_start: Instant,
     message: Option<Message>,
@@ -102,15 +34,13 @@ pub struct Message {
 
 impl Game {
     /// Creates a new `Game` instance.
-    pub fn new(title: &'static str) -> Result<Game, InitError> {
-        let rb = try!(RustBox::init(InitOptions{
-            input_mode: InputMode::Esc,
-            buffer_stderr: true,
-            .. InitOptions::default()
-        }));
+    pub fn new(title: &'static str) -> io::Result<Game> {
+        let screen = Screen::new(Default::default())?;
+
+        screen.set_cursor_mode(CursorMode::Invisible)?;
 
         Ok(Game{
-            rb: rb,
+            screen,
             title: title,
             game_start: Instant::now(),
             message: None,
@@ -121,8 +51,8 @@ impl Game {
         })
     }
 
-    /// Returns a reference to the active `RustBox`.
-    pub fn rb(&self) -> &RustBox { &self.rb }
+    /// Returns a reference to the active `Screen`.
+    pub fn screen(&mut self) -> &mut Screen { &mut self.screen }
 
     /// Triggers a redraw on the next iteration of the main loop
     pub fn redraw(&mut self) {
@@ -136,24 +66,24 @@ impl Game {
     /// Main game loop. May be called recursively.
     ///
     /// Call `quit()` to terminate the topmost running loop.
-    pub fn run<G: GameImpl>(&mut self, g: &mut G) -> Result<(), EventError> {
+    pub fn run<G: GameImpl>(&mut self, g: &mut G) -> io::Result<()> {
         let level = self.loop_level;
         self.loop_level += 1;
 
         while self.loop_level > level {
-            g.on_tick(self);
+            g.on_tick(self)?;
 
             if self.redraw {
+                self.draw(g)?;
                 self.redraw = false;
-                self.draw(g);
             }
 
-            let ev = try!(self.rb.peek_event(Duration::from_millis(100), false));
-
-            match ev {
-                Event::KeyEvent(key) => g.on_key_event(self, key),
-                Event::ResizeEvent(..) => self.redraw(),
-                _ => ()
+            if let Some(ev) = self.screen.read_event(Some(Duration::from_millis(100)))? {
+                match ev {
+                    Event::Key(key) => g.on_key_event(self, key),
+                    Event::Resize(..) => self.redraw(),
+                    _ => ()
+                }
             }
 
             self.try_expire_message();
@@ -162,33 +92,36 @@ impl Game {
         Ok(())
     }
 
-    pub fn draw_title(&self, include_time: bool) {
-        let w = self.rb.width();
+    pub fn draw_title(&mut self, include_time: bool) {
+        let Size{columns, ..} = self.screen.size();
 
-        let sty = rustbox::RB_REVERSE;
-        let fg = Color::Default;
-        let bg = Color::Default;
+        self.screen.set_cursor(Cursor::default());
+        self.screen.set_style(Style::REVERSE);
 
-        for x in 0..w {
-            self.rb.print_char(x, 0, sty, fg, bg, ' ');
+        for _ in 0..columns {
+            self.screen.write_char(' ');
         }
 
         if include_time {
             let s = self.time_str();
 
-            self.rb.print(1, 0, sty, fg, bg, self.title);
-            self.rb.print(w.saturating_sub(6), 0, sty, fg, bg, &s);
+            self.screen.set_style(Style::REVERSE);
+
+            self.screen.write_at((0, 1), self.title);
+
+            let col = columns.saturating_sub(6);
+            self.screen.write_at((0, col), &s);
+
+            self.screen.clear_attributes();
         }
     }
 
-    pub fn draw_message(&self) {
+    pub fn draw_message(&mut self) {
         if let Some(ref msg) = self.message {
-            let h = self.rb.height();
-            let sty = rustbox::RB_BOLD;
-            let fg = Color::Default;
-            let bg = Color::Default;
+            let Size{lines, ..} = self.screen.size();
 
-            self.rb.print(0, h - 1, sty, fg, bg, &msg.text);
+            self.screen.write_styled_at((lines - 1, 0),
+                None, None, Style::BOLD, &msg.text);
         }
     }
 
@@ -241,18 +174,23 @@ impl Game {
         }
     }
 
-    fn draw<G: GameImpl>(&mut self, g: &mut G) {
-        self.rb.clear();
+    fn draw<G: GameImpl>(&mut self, g: &mut G) -> io::Result<()> {
+        let size = self.screen.size();
 
-        g.draw(self);
+        self.screen.clear_screen();
 
-        self.refresh();
+        if size.columns < 50 || size.lines < 20 {
+            self.pause();
+            self.screen.write_at((0, 0), "screen is too small");
+        } else {
+            g.draw(self);
+        }
+
+        self.refresh()
     }
 
-    pub fn refresh(&self) {
-        // Hide the cursor
-        self.rb.set_cursor(!0, !0);
-        self.rb.present();
+    pub fn refresh(&mut self) -> io::Result<()> {
+        self.screen.refresh()
     }
 
     pub fn reset_time(&mut self) {
@@ -274,6 +212,20 @@ impl Game {
     fn time_str(&self) -> String {
         time_str(self.play_time())
     }
+}
+
+pub fn draw_card(screen: &mut Screen, card: Card, highlight: bool) {
+    let sty = if highlight {
+        Style::REVERSE
+    } else {
+        Style::empty()
+    };
+
+    let fg = card.suit.color().term_color();
+    let bg = None;
+    let s = format!("{} {:>2}", card.suit.char(), card.value);
+
+    screen.write_styled(fg, bg, sty, &s);
 }
 
 pub fn time_str(secs: u32) -> String {

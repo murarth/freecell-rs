@@ -1,8 +1,8 @@
 use std::cmp::min;
 use std::fmt;
 
+use mortal::Color as TermColor;
 use rand::{thread_rng, Rng};
-use rustbox;
 
 pub const ACE: u8 = 1;
 pub const JACK: u8 = 11;
@@ -77,10 +77,10 @@ pub enum Color {
 }
 
 impl Color {
-    pub fn console_color(&self) -> rustbox::Color {
+    pub fn term_color(&self) -> Option<TermColor> {
         match *self {
-            Color::Black => rustbox::Color::Black,
-            Color::Red => rustbox::Color::Red,
+            Color::Black => None,
+            Color::Red => Some(TermColor::Red),
         }
     }
 }

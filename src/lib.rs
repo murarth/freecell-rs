@@ -1,5 +1,5 @@
+extern crate mortal;
 extern crate rand;
-extern crate rustbox;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
 extern crate serde_json;
