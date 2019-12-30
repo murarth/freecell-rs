@@ -2,7 +2,7 @@ use std::cmp::min;
 use std::fmt;
 
 use mortal::Color as TermColor;
-use rand::{thread_rng, Rng};
+use rand::{thread_rng, seq::SliceRandom};
 
 pub const ACE: u8 = 1;
 pub const JACK: u8 = 11;
@@ -132,7 +132,7 @@ fn new_deck() -> Vec<Card> {
         }
     }
 
-    thread_rng().shuffle(&mut deck);
+    deck.shuffle(&mut thread_rng());
 
     deck
 }

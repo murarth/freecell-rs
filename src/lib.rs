@@ -1,16 +1,15 @@
 extern crate mortal;
 extern crate rand;
-extern crate serde;
-#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate serde;
 extern crate serde_json;
+extern crate term_game;
 
 pub mod freecell;
 pub mod freecell_game;
-pub mod game;
 
 pub fn run() {
     use freecell_game::FreeCellGame;
-    use game::Game;
+    use term_game::Game;
 
     let mut game = Game::new("FreeCell").expect("failed to initialize console");
     let mut fc = FreeCellGame::new();

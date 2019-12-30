@@ -5,11 +5,12 @@ use std::mem::replace;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use mortal::{Cursor, Key, Size, Style};
+use mortal::{Cursor, Key, Screen, Size, Style};
 use serde_json as json;
 
+use term_game::{Game, GameImpl};
+
 use freecell::{Card, Color, Face, FreeCell, ACE, JACK, QUEEN, KING};
-use game::{Game, GameImpl, draw_card, time_str};
 
 const SLOT_NAMES: [char; 8] = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K'];
 
@@ -882,4 +883,22 @@ impl GameImpl for FreeCellGame {
 
         Ok(())
     }
+}
+
+fn draw_card(screen: &mut Screen, card: Card, highlight: bool) {
+    let sty = if highlight {
+        Style::REVERSE
+    } else {
+        Style::empty()
+    };
+
+    let fg = card.suit.color().term_color();
+    let bg = None;
+    let s = format!("{} {:>2}", card.suit.char(), card.value);
+
+    screen.write_styled(fg, bg, sty, &s);
+}
+
+fn time_str(secs: u32) -> String {
+    format!("{:>2}:{:02}", secs / 60, secs % 60)
 }
