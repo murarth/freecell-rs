@@ -1,8 +1,4 @@
-extern crate mortal;
-extern crate rand;
-#[macro_use] extern crate serde;
-extern crate serde_json;
-extern crate term_game;
+//! FreeCell game
 
 pub mod freecell;
 pub mod freecell_game;

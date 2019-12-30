@@ -5,12 +5,14 @@ use std::mem::replace;
 use std::path::PathBuf;
 use std::time::Duration;
 
+use dirs::config_dir;
 use mortal::{Cursor, Key, Screen, Size, Style};
+use serde::{Deserialize, Serialize};
 use serde_json as json;
 
 use term_game::{Game, GameImpl};
 
-use freecell::{Card, Color, Face, FreeCell, ACE, JACK, QUEEN, KING};
+use crate::freecell::{Card, Color, Face, FreeCell, ACE, JACK, QUEEN, KING};
 
 const SLOT_NAMES: [char; 8] = ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K'];
 
@@ -114,17 +116,9 @@ impl Stats {
     }
 }
 
-#[cfg(unix)]
 fn stats_path() -> PathBuf {
-    use std::env::home_dir;
-    let home = home_dir().expect("cannot find home dir");
-    home.join(".config/mur-freecell/stats.cfg")
-}
-
-// TODO: Where does Windows store app-specific configuration?
-#[cfg(windows)]
-fn stats_path() -> PathBuf {
-    "stats.cfg".into()
+    let config = config_dir().expect("cannot find config dir");
+    config.join("mur-freecell/stats.cfg")
 }
 
 fn load_stats() -> io::Result<Stats> {
@@ -137,22 +131,22 @@ fn load_stats() -> io::Result<Stats> {
 
     let mut buf = String::new();
 
-    try!(f.read_to_string(&mut buf));
+    f.read_to_string(&mut buf)?;
 
-    let sf: StatsFile = try!(json::from_str(&buf)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())));
+    let sf: StatsFile = json::from_str(&buf)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
     Ok(sf.into())
 }
 
 fn save_stats(stats: &Stats) -> io::Result<()> {
-    let mut f = try!(File::create(&stats_path()));
-    let mut data = try!(json::to_string(stats)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string())));
+    let mut f = File::create(&stats_path())?;
+    let mut data = json::to_string(stats)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
     data.push('\n');
 
-    try!(f.write_all(data.as_bytes()));
+    f.write_all(data.as_bytes())?;
 
     Ok(())
 }
@@ -537,7 +531,7 @@ impl FreeCellGame {
         };
 
         match (old, action) {
-            (Reserve, Slot(n @ 0 ... 3)) => {
+            (Reserve, Slot(n @ 0 ..= 3)) => {
                 if self.fc.reserve(n as usize).is_some() {
                     self.action = Some(Action::ReserveSlot(n));
                 } else {
@@ -817,7 +811,7 @@ impl GameImpl for FreeCellGame {
                 Key::Char('r') => loc.color = Some(Color::Red),
                 Key::Char('l') => loc.what = Match::Low,
                 Key::Char('a') => loc.what = Match::Value(ACE),
-                Key::Char(n @ '2' ... '9') => loc.what = Match::Value(n as u8 - b'0'),
+                Key::Char(n @ '2' ..= '9') => loc.what = Match::Value(n as u8 - b'0'),
                 Key::Char('0') => loc.what = Match::Value(10),
                 Key::Char('j') => loc.what = Match::Value(JACK),
                 Key::Char('q') => loc.what = Match::Value(QUEEN),
