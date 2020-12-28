@@ -8,7 +8,7 @@ pub fn run() {
     use term_game::Game;
 
     let mut game = Game::new("FreeCell").expect("failed to initialize console");
-    let mut fc = FreeCellGame::new();
+    let mut fc = FreeCellGame::new().expect("failed to initialize game");
 
     game.run(&mut fc).unwrap();
 }

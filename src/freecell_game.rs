@@ -133,6 +133,10 @@ fn load_stats() -> io::Result<Stats> {
 
     f.read_to_string(&mut buf)?;
 
+    if buf.is_empty() {
+        return Ok(Stats::default());
+    }
+
     let sf: StatsFile = json::from_str(&buf)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
@@ -181,13 +185,10 @@ enum Match {
 }
 
 impl FreeCellGame {
-    pub fn new() -> FreeCellGame {
-        let stats = match load_stats() {
-            Ok(stats) => stats,
-            Err(e) => panic!("failed to load stats: {}", e)
-        };
+    pub fn new() -> io::Result<FreeCellGame> {
+        let stats = load_stats()?;
 
-        FreeCellGame{
+        Ok(FreeCellGame {
             fc: FreeCell::new(),
             stats: stats,
             undo: Vec::with_capacity(64),
@@ -199,7 +200,7 @@ impl FreeCellGame {
             confirm_result: false,
             try_sweep: true,
             game_won: false,
-        }
+        })
     }
 
     fn confirm(&mut self, game: &mut Game, msg: &str) -> bool {
